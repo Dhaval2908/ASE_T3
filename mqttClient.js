@@ -12,7 +12,15 @@ const db = new sqlite3.Database('../database.db');
 
 // Create a table to store MQTT data
 db.serialize(() => {
-    db.run('CREATE TABLE IF NOT EXISTS Sensordata (id INTEGER PRIMARY KEY AUTOINCREMENT, topic TEXT NOT NULL, message TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)');
+    db.run(`CREATE TABLE IF NOT EXISTS Sensordata (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        heartsensor TEXT,
+        bp TEXT,
+        chol TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES user(id)
+    );`);
 });
 
 
