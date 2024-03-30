@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Health Monitoring</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        a{
+        text-decoration: none;
+        color: black;
+        font-weight: 600;
+    }
+
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+            padding-right: 160px; 
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 36px;
+        }
+
+        .header-buttons {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+        }
+
+        .header-buttons button {
+            padding: 10px 20px; 
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .profile-button {
+            margin-right: 10px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+        }
+
+        .logout-button {
+            background-color: #dc3545;
+            color: #fff;
+            border: none;
+        }
+
+        .card {
+            margin: 20px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Continuous Health Monitoring</h1>
+        <div class="header-buttons">
+            <button class="profile-button"><a href="/dashboard">Back to Home</a></button>
+            <button class="logout-button"><a href="/logout">Logout</a></button>
+        </div>
+    </header>
+
+    <div class="card">
+        <h2>Heartsensor</h2>
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>Blood Pressure</h2>
+        <canvas id="myChart2"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>Cholesterol</h2>
+        <canvas id="myChart3"></canvas>
+    </div>
+
+    <script>
+        const data = <%- JSON.stringify(rows) %>;
+        const ids = data.map(item => item.timestamp);
+        const values = data.map(item => item.heartsensor);
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ids,
+                datasets: [{
+                    label: 'Value',
+                    data: values,
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        const data2 = <%- JSON.stringify(rows) %>;
+        const ids2 = data2.map(item => item.timestamp);
+        const values2 = data2.map(item => item.bp);
+        const ctx2 = document.getElementById('myChart2').getContext('2d');
+        const myChart2 = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: ids2,
+                datasets: [{
+                    label: 'Value',
+                    data: values2,
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        const data3 = <%- JSON.stringify(rows) %>;
+        const ids3 = data3.map(item => item.timestamp);
+        const values3 = data3.map(item => item.chol);
+        const ctx3 = document.getElementById('myChart3').getContext('2d');
+        const myChart3 = new Chart(ctx3, {
+            type: 'line',
+            data: {
+                labels: ids3,
+                datasets: [{
+                    label: 'Value',
+                    data: values3,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1,
+                    fill: false
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

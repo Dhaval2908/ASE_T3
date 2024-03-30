@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>User Profile</title>
+ <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+
+    header {
+      background-color: #333;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 30px;
+      position: relative; /* Added for positioning the logout and profile buttons */
+    }
+    h1 {
+      margin: 0;
+      font-size: 36px;
+    }
+    a{
+        text-decoration: none;
+        color: black;
+        font-weight: 600;
+    }
+    .logout-button, .home-button {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .logout-button {
+      right: 20px;
+      background-color: #dc3545;
+      color: #fff;
+      border: none;
+    }
+
+    .home-button {
+      right: 120px; /* Adjust as needed */
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+    }
+
+    .profile-container {
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 24px;
+      color: #333;
+    }
+
+    p {
+      margin-bottom: 20px;
+      font-size: 16px;
+      color: #666;
+    }
+ </style>
+</head>
+<body>
+    <header>
+        <h1>Smart Wearable Health Monitoring</h1>
+        <button class="logout-button"><a href="/logout">Logout</a></button>
+        <button class="home-button" ><a href="/dashboard">Home</a></button>
+      </header>
+ <div class="profile-container">
+    <h2>User Profile</h2>
+    <p><strong>Email:</strong> <%= email %></p>
+    <p><strong>Age:</strong> <%= age %></p>
+    <p><strong>Gender:</strong> <%= gender %></p>
+ </div>
+</body>
+</html>
