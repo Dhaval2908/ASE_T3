@@ -8,15 +8,27 @@ const path = require('path');
 const { spawn } = require('child_process');
 const cron = require('node-cron');
 const { get } = require('http');
+const qrCodeReader = require('qrcode-reader');
+const jimp = require('jimp');
+const QRCode = require('qrcode');
+const qrCode = require('qr-image');
+const fs = require('fs');
+const fileUpload = require('express-fileupload');
+const bodyParser = require('body-parser');
 
 
 
 const app = express();
 const db = new sqlite3.Database('../database.db');
 
+
+app.use(fileUpload());
+
 db.serialize(() => {
-    db.run('CREATE TABLE IF NOT EXISTS u_r (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, password TEXT NOT NULL,age INTEGER, gender TEXT)');
+    db.run('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL, password TEXT NOT NULL, age INTEGER NOT NULL, gender TEXT NOT NULL, cholesterol INTEGER NOT NULL, chest_pain_type TEXT NOT NULL)');
 });
+
+
 db.serialize(() => {
     db.run('CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, time TEXT, message TEXT, triggered INTEGER DEFAULT 0)');
 });
@@ -24,6 +36,12 @@ db.serialize(() => {
 
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
+// Parse application/x-www-form-urlencoded
+app.use(bodyParser.urlencoded({ extended: false }));
+
+// Parse application/json
+app.use(bodyParser.json());
+
 app.use(session({ secret: 'secret', resave: false, saveUninitialized: false }));
 app.use((req, res, next) => {
     res.locals.userId = req.session.userId;
@@ -36,20 +54,49 @@ app.get('/signup', (req, res) => {
 
 app.post('/signup', async (req, res) => {
     try {
-        const { email, password, age, gender } = req.body;
+        // Assuming req.body is the object containing form data
+        console.log(req.body.health_consent)
+        const data = {};
+        if(req.body.health_consent){
+            for (const key in req.body) {
+                if (Array.isArray(req.body[key])) {
+                    data[key] = req.body[key][0]; // Use the second element of the array
+                } else {
+                    data[key] = req.body[key]; // Use the value as is
+                }
+            }
+        }
+        else{
+            for (const key in req.body) {
+                if (Array.isArray(req.body[key])) {
+                    data[key] = req.body[key][1]; // Use the second element of the array
+                } else {
+                    data[key] = req.body[key]; // Use the value as is
+                }
+            }
+        }
+        
+
+        console.log(data);
 
         // Check if the email already exists in the database
-        db.get('SELECT * FROM u_r WHERE email = ?', [email], async (err, row) => {
+        db.get('SELECT * FROM users WHERE email = ?', [data.email], async (err, row) => {
             if (err) {
                 console.error(err);
                 return res.status(500).send('An error occurred while checking email existence');
             }
             if (row) {
-                return res.render('signup', { error: 'Email already exists' }); // Email already exists, render signup page with error message
+                return res.render('signup', { error: 'email already exists' }); // email already exists, render signup page with error message
             }
 
-            const hashedPassword = await bcrypt.hash(password, 10);
-            db.run('INSERT INTO u_r (email, password, age, gender) VALUES (?, ?, ?, ?)', [email, hashedPassword, age, gender]);
+            const hashedPassword = await bcrypt.hash(data.password.toString(), 10);
+            // Check if cholesterol and chest_pain_type are provided, otherwise set them to NULL
+            if (data.cholesterol == undefined) {
+                data.cholesterol = 0;
+                data.chest_pain_type = 0;
+            }
+            // Insert the user into the database
+            db.run('INSERT INTO users (name, email, password, age, gender, cholesterol, chest_pain_type, loginFirstTime) VALUES (?, ?, ?, ?, ?, ?, ?, 1)', [data.name, data.email, hashedPassword, data.age, data.gender, data.cholesterol, data.chest_pain]);
             res.redirect('/login');
         });
     } catch (error) {
@@ -59,13 +106,19 @@ app.post('/signup', async (req, res) => {
 });
 
 
+
+app.get('/', (req, res) => {
+    res.redirect('/login');
+});
+
 app.get('/login', (req, res) => {
     res.render('login', { error: null }); // Pass the error variable with a default value of null
 });
 
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
-    db.get('SELECT * FROM u_r WHERE email = ?', [email], async (err, row) => {
+   
+    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, row) => {
         if (err) {
             console.error(err);
             return res.status(500).send('An error occurred');
@@ -73,15 +126,30 @@ app.post('/login', async (req, res) => {
         if (!row) {
             return res.render('login', { error: 'Invalid email or password' }); // Pass the error message
         }
-        const validPassword = await bcrypt.compare(password, row.password);
+        const validPassword = await bcrypt.compare(password, row.password.toString());
         if (!validPassword) {
-            return res.render('login', { error: 'Invalid email or password' }); // Pass the error message
+            return res.render('login', { error: 'Password is Wrong' }); // Pass the error message
         }
         req.session.userId = row.id;
-        res.cookie('loggedIn', 'true', { maxAge: 30 * 60 * 1000 });
-        res.redirect('/dashboard');
+
+        // Check if the user is logging in for the first time
+        if (row.loginFirstTime === 1) {
+            // Update the loginFirstTime column to false
+            db.run('UPDATE users SET loginFirstTime = 0 WHERE id = ?', [row.id], (updateErr) => {
+                if (updateErr) {
+                    console.error(updateErr);
+                    return res.status(500).send('An error occurred while updating user data');
+                }
+                res.redirect('/scan-qr-code'); // Redirect to scan QR code page
+            });
+        } else {
+            res.cookie('loggedIn', 'true', { maxAge: 30 * 60 * 1000 });
+            res.redirect('/dashboard');
+        }
     });
 });
+
+
 
 
 
@@ -94,7 +162,7 @@ function requireAuth(req, res, next) {
 
 app.use((req, res, next) => {
     if (req.session && req.session.userId) {
-        db.get('SELECT email FROM u_r WHERE id = ?', [req.session.userId], (err, row) => {
+        db.get('SELECT email FROM users WHERE id = ?', [req.session.userId], (err, row) => {
             if (err) {
                 console.error(err);
                 return next(err);
@@ -114,68 +182,70 @@ app.use((req, res, next) => {
         next();
     }
 });
-
+// 
 app.get('/dashboard', requireAuth, (req, res) => {
     // Query the SQLite database for the latest data from each sensor
    
         res.render('dashboard');
     
 });
-
-
 app.get('/dashboard-data', requireAuth, (req, res) => {
     // Query the SQLite database for the user's age and gender
-    db.get('SELECT age, gender FROM u_r WHERE id = ?', [req.session.userId], (err, userRow) => {
+    db.get('SELECT age, gender,cholesterol,chest_pain_type FROM users WHERE id = ?', [req.session.userId], (err, userRow) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ error: 'An error occurred while fetching user data' });
         }
 
         // Query the SQLite database for the latest data from each sensor
-        db.get('SELECT * FROM Sensordata ORDER BY id DESC LIMIT 1', (err, row) => {
+        db.get('SELECT * FROM s_data ORDER BY id DESC LIMIT 1', (err, row) => {
             if (err) {
                 console.error(err);
                 return res.status(500).send('An error occurred');
             }
+
             // Prepare the data to send to the dashboard
             const data = {
                 heartsensor: null,
                 bp: null,
                 chol: null
             };
-            console.log(row)
             if (row) {
                 data.heartsensor = row.heartsensor;
                 data.bp = row.bp;
-                data.chol = row.chol;
+                
             }
-            // Send the data to the dashboard 
-        
+
             // Load the ML model
-            const form_data = {
+            let form_data = {
                 age: userRow.age,
-                trestbps: data.bp, // Sample value, replace with actual value from the form
-                chol: data.chol, // Sample value, replace with actual value from the form
-                thalch: data.heartsensor, // Sample value, replace with actual value from the form
-                sex: userRow.gender,
-                // oxygen_level: data.oxygensensor // Sample value, replace with actual value from the form
+                trestbps: data.bp,
+                thalch: data.heartsensor,
+                sex: userRow.gender
             };
 
-            const pythonProcess = spawn('python', ['smartanalysis.py', JSON.stringify(form_data)]);
+            let pythonFileName;
+            if (userRow.cholesterol == 0) {
+                console.log("ifffffffffffff")
+                pythonFileName = 'smartdatanor.py'; // Python script for 'o' value
+            } else {
+                console.log("elsseeeese")
+                pythonFileName = 'smartdata.py'; // Python script for other values
+                form_data = { ...form_data,  chol: userRow.cholesterol,cp: userRow.chest_pain_type }; // Adjust form_data for other values
+            }
+
+            const pythonProcess = spawn('python', [pythonFileName, JSON.stringify(form_data)]);
             console.log('Python process spawned');
-            console.log(form_data)
+            console.log(form_data);
+
             pythonProcess.stdout.on('data', (data) => {
                 console.log('Received data from Python process');
                 const predictions = JSON.parse(data);
                 console.log('Prediction:', predictions);
 
-                // Check if the alert prediction is false
                 if (predictions.alert_prediction === 'False') {
-                    // Send a response indicating the need to consult a doctor
-                    console.log("hii iam here")
                     res.status(200).json({ message: 'Something is wrong. Please consult a doctor.' });
                 } else {
-                    // Send a normal response with the data
                     res.status(200).json(data);
                 }
             });
@@ -186,9 +256,10 @@ app.get('/dashboard-data', requireAuth, (req, res) => {
     });
 });
 
+
 app.get('/graph', (req, res) => {
     // Query the SQLite database for the latest heartbeat data
-    db.all('SELECT * FROM Sensordata WHERE heartsensor IS NOT NULL ORDER BY timestamp DESC LIMIT 100', (err, rows) => {
+    db.all('SELECT * FROM s_data WHERE heartsensor IS NOT NULL ORDER BY timestamp DESC LIMIT 100', (err, rows) => {
         if (err) {
             console.error(err);
             return res.status(500).send('An error occurred while fetching data');
@@ -200,7 +271,7 @@ app.get('/graph', (req, res) => {
     
 });
 app.get('/profile', requireAuth, (req, res) => {
-    db.get('SELECT email, age, gender FROM u_r WHERE id = ?', [req.session.userId], (err, row) => {
+    db.get('SELECT email, age, gender FROM users WHERE id = ?', [req.session.userId], (err, row) => {
         if (err) {
             console.error(err);
             return res.status(500).send('An error occurred while fetching user data');
@@ -280,3 +351,4 @@ const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
